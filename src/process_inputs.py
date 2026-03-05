@@ -1,10 +1,6 @@
 from affine import Affine
 import argparse
 import os
-if os.environ["APP_ENV"].lower() == "cloud":
-    from azure.storage.blob import BlobServiceClient
-    from azure.identity import DefaultAzureCredential
-    import azure
 from osgeo import gdal
 from osgeo.gdal import gdalconst
 import geopandas as gpd
@@ -30,10 +26,8 @@ from zipfile import ZipFile
 import fiona
 from matplotlib import pyplot as plt
 import rasterio
-# from gdal import gdalconst
+from osgeo.gdal import gdalconst
 
-if os.getenv("AZ_BATCH_TASK_WORKING_DIR") is not None:
-    sys.path.append(os.getenv("AZ_BATCH_TASK_WORKING_DIR"))
 
 import src.utils as utils
 
@@ -41,8 +35,8 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  
 
 
-proj_four_dict = {'102704':"+proj=lcc +lat_1=40 +lat_2=43 +lat_0=39.83333333333334 +lon_0=-100 +x_0=500000.0000000002 +y_0=0 +ellps=GRS80 +datum=NAD83 +to_meter=0.3048006096012192 +no_defs "}
-
+proj_four_dict = {'102704':"+proj=lcc +lat_1=40 +lat_2=43 +lat_0=39.83333333333334 +lon_0=-100 +x_0=500000.0000000002 +y_0=0 +ellps=GRS80 +datum=NAD83 +to_meter=0.3048006096012192 +no_defs ",
+                  '102761':"+proj=lcc +lat_0=17.8333333333333 +lon_0=-66.4333333333333 +lat_1=18.0333333333333 +lat_2=18.4333333333333 +x_0=200000 +y_0=200000 +datum=NAD83 +units=us-ft +no_defs +type=crs"}
 def check_files_exist(files): 
     return all(pl.Path(file).exists() for file in files)
     
@@ -141,7 +135,7 @@ def get_heatmap_filename(all_data_files, huc, model_type):
     heatmap_file = []
     while (len(heatmap_file) == 0) and (len(huc) >= 4):
         logger.debug("trying to find heatmap file for huc: " + huc)
-        heatmap_file = [f for f in relevant_files if huc == re.findall('\d+', f)[0]]
+        heatmap_file = [f for f in relevant_files if huc == re.findall(r'\d+', f)[0]]
         logger.debug(heatmap_file)
         huc = huc[:-2]
     
@@ -152,14 +146,6 @@ def get_heatmap_filename(all_data_files, huc, model_type):
         heatmap_file = heatmap_file[0]
         logger.debug("found heatmap file: " + heatmap_file)
         return heatmap_file
-
-def get_heatmap_blob(storage_acct, container, credentials, model_type, huc):
-    # pull in list of all blobs from container
-    container_client = utils.connect_to_container(storage_acct, container, credentials)
-    data_blobs = []
-    for blob in container_client.list_blobs():
-        data_blobs.append(blob.name)
-    return get_heatmap_filename(data_blobs, huc, model_type)
 
 
 def download_nhd(huc4:str,gdb_dir:pl.Path,overwrite=False) -> str:
@@ -302,35 +288,7 @@ def process_nhd(gdb_path, out_file, sr, overwrite=False):
     
     write_file(flow_data, out_file)
 
-def check_cloud_for_dem(storage_acct, container, credentials, huc):
-    """
-    check if the DEM folder on cloud storage has a DEM available
-    """
-    # pull in list of all blobs from container
-    container_client = utils.connect_to_container(storage_acct, container, credentials)
-    data_blobs = []
-    for blob in container_client.list_blobs():
-        data_blobs.append(blob.name)
-    
-    # get files under DEM folder
-    relevant_files = [f for f in data_blobs if ("dem/" in f.lower() and "tif" in f.lower() and "aux.xml" not in f.lower())]
-    
-    # check if file available for HUC
-    dem_files = []
-    while (len(dem_files) == 0) and (len(huc) >= 4):
-        logger.debug("trying to find DEM file in blob storage for huc: " + huc)
-        dem_files = [f for f in relevant_files if huc == re.findall('\d+', f)[0]]
-        logger.debug(dem_files)
-        huc = huc[:-2]
-    
-    if len(dem_files) == 0:
-        logger.info("No DEM file found on blob storage")
-        return None
-    else:
-        logger.info("found DEM file(s) on blob storage: " + str(dem_files))
-        
-        return dem_files
-    
+
 def download_dem(geo_df, dataset, out_dir:str, huc8, overwrite=False) -> list:
     '''
     Downloads DEM data for a given area (geo_df). Returns a list of the dems downloaded.
@@ -588,31 +546,6 @@ def update_res(curr_res, new_res, config):
     config.res = new_res
     return new_res, config
 
-
-def list_blobs(container_name:str, sub_folder_name: str):
-    """
-    Download the files from a given blob.
-    """
-    connection_string = os.getenv('AZURE_STORAGE_CONNECTION_STRING')
-
-    try:
-        # instantiate a BlobServiceClient using a connection string
-        blob_service_client = BlobServiceClient.from_connection_string(conn_str=connection_string)
-
-        # point to the container with the output blobs
-        container_client  = blob_service_client.get_container_client(container_name)
-
-        # retrieve a list of the blobs
-        blob_list = container_client.list_blobs(name_starts_with=sub_folder_name)
-        
-        # filter to those with file extension
-        blob_list = [x.name for x in blob_list if pl.Path(x.name).suffix != ""]
-        logger.info("found {} blobs to download: {}".format(len(blob_list), blob_list))
-            
-        return blob_list
-    
-    except Exception as ex:
-        print(f'Exception: {ex}')
         
 def main(huc:str, config, overwrite=False):
     """

@@ -1,6 +1,5 @@
 data/Rasters
 data/Vectors
-grassdata
 docker/wincacerts.pem
 docker/stantec-ca.crt
 src/.ipynb_checkpoints

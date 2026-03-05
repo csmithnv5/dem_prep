@@ -30,24 +30,30 @@ import psutil
 import numpy
 import datetime
 import requests
-import json
 import platform
 
-proj_four_dict = {'102704':"+proj=lcc +lat_1=40 +lat_2=43 +lat_0=39.83333333333334 +lon_0=-100 +x_0=500000.0000000002 +y_0=0 +ellps=GRS80 +datum=NAD83 +to_meter=0.3048006096012192 +no_defs "}
+
+proj_four_dict = {'102704':"+proj=lcc +lat_1=40 +lat_2=43 +lat_0=39.83333333333334 +lon_0=-100 +x_0=500000.0000000002 +y_0=0 +ellps=GRS80 +datum=NAD83 +to_meter=0.3048006096012192 +no_defs ",
+                  '102761':"+proj=lcc +lat_0=17.8333333333333 +lon_0=-66.4333333333333 +lat_1=18.0333333333333 +lat_2=18.4333333333333 +x_0=200000 +y_0=200000 +datum=NAD83 +units=us-ft +no_defs +type=crs"}
 
 #Define GIS based directory and database (data) storage location
-Mapset = 'ML'
+mapset = 'ML'
 wkdir = pl.Path(os.getcwd())
+# define GRASS data settings (adapt to your needs)
+grassdata = str(wkdir.parent/'grassdata/')
+
+pem=True
 if platform.system() == 'Windows':
-    docker = False
+    docker = True
+    lin = False
 else:
     docker = True
-if docker:
-    pem = '/usr/local/share/stantec-ca.crt'
+    lin = True
+if lin:
     # create GRASS GIS runtime environment
     subprocess.check_output(["grass", "--config", "path"]).strip()
     #Define GIS based directory and database (data) storage location
-    gisbase = r'/usr/lib/grass78'
+    gisbase = r'/usr/lib/grass84'
     gisdb = "/home/grassdata"
     os.environ['GISBASE'] = gisbase
     #Append python scripts to system path
@@ -55,8 +61,6 @@ if docker:
     sys.path.append(grass_pydir)
     
 else:
-    pem = '../docker/wincacerts.pem'
-    # create GRASS GIS runtime environment
     grass7bin = r'C:\Program Files\GRASS GIS 7.8\grass78.bat'
     startcmd = [grass7bin, "--config", "path"]
 
@@ -80,7 +84,7 @@ import grass.script.array as garray
 from grass.pygrass.modules import Module, ParallelModuleQueue
 
 # for the latest development version use:
-#pip install git+https://github.com/zarch/grass-session.git
+#pip install grass-session
 from grass_session import Session
 from grass.script import core as gcore
 
@@ -196,43 +200,42 @@ def lower_pd_cols(df):
     df = df.rename(columns = lower_dict)
     return df
 
-def initialize_grass_db(Location, Mapset, GRASS_GIS_Projection,docker=docker):
-    if docker:
-        #Start GRASS GIS session
-        rcfile = gsetup.init(gisbase, "data/grassdata", "nc_basic_spm_grass7", "user1")
-
-        ## Location
-        GrassGIS_Location = os.path.join(gisdb, Location)
-        #Location and Mapset
-        GrassGIS_LocationMapset = os.path.join(gisdb, Location, Mapset)
-        #Setup database for the project. Need to setup the location first, which builds a permanent folder for mapsets
-
-        #Check if the Location is setup. If not setup, create the location for the database
-        if os.path.exists(GrassGIS_Location):
-            print("Database Location Exists")
+def initialize_grass_db(location, mapset, projection):
+    #Start GRASS GIS session
+    rcfile = gsetup.init(gisbase, gisdb, "nc_basic_spm_grass7", "user1")
+    
+    ## Location
+    GrassGIS_Location = os.path.join(gisdb, location)
+    #Location and Mapset
+    GrassGIS_LocationMapset = os.path.join(gisdb, location, mapset)
+    #Setup database for the project. Need to setup the location first, which builds a permanent folder for mapsets
+    
+    #Check if the Location is setup. If not setup, create the location for the database
+    if os.path.exists(GrassGIS_Location):
+        print("Database Location Exists")
+    else:
+        if projection in proj_four_dict.keys():
+            with Session(gisdb=gisdb, location=location):
+                gs.run_command('g.proj',location=location,proj4=f"{proj_four_dict[projection]}",flags='c')
+                #gs.run_command('g.mapset', mapset=Mapset, location=Location)
+                # run something in PERMANENT mapset:
+                print(gcore.parse_command("g.gisenv", flags="s"))
+            
         else:
-            if GRASS_GIS_Projection in proj_four_dict.keys():
-                with Session(gisdb=gisdb, location=Location):
-                    gs.run_command('g.proj',location=Location,proj4=f"{proj_four_dict[GRASS_GIS_Projection]}",flags='c')
-                    #gs.run_command('g.mapset', mapset=Mapset, location=Location)
-                    # run something in PERMANENT mapset:
-                    print(gcore.parse_command("g.gisenv", flags="s"))
-                
-            else:
-                with Session(gisdb=gisdb, location=Location, create_opts="EPSG:"+GRASS_GIS_Projection):
-                    # run something in PERMANENT mapset:
-                    print(gcore.parse_command("g.gisenv", flags="s"))
-
-        if os.path.exists(GrassGIS_LocationMapset):
-            print("Database Mapset Exists")
-        else:
-            with Session(gisdb=gisdb, location=Location, mapset=Mapset,create_opts=""):
-                # do something in the test mapset.
-                print(gcore.parse_command("g.gisenv", flags="s"))  
-        # remove old session
-        os.remove(rcfile)
+            with Session(gisdb=gisdb, location=location, create_opts="EPSG:"+projection):
+                # run something in PERMANENT mapset:
+                print(gcore.parse_command("g.gisenv", flags="s"))
+    
+    if os.path.exists(GrassGIS_LocationMapset):
+        print("Database Mapset Exists")
+    else:
+        with Session(gisdb=gisdb, location=location, mapset=mapset,create_opts=""):
+            # do something in the test mapset.
+            print(gcore.parse_command("g.gisenv", flags="s"))  
+    # remove old session
+    os.remove(rcfile)
     #Start new session
-    rcfile = gsetup.init(gisbase,gisdb, Location, 'PERMANENT')
+    rcfile = gsetup.init(gisbase,gisdb, location, mapset)
     # example calls
     print(gs.message('Current GRASS GIS 7 environment:'))
     print (gs.gisenv())
@@ -675,6 +678,7 @@ def dem_download(dem_links:list,output_dir:str,dem_folder:list,docker=pem) -> li
            
         else:
             print('DEM already downloaded')
+            dems.append(raster_name)
         clear_output(wait=True)
     return dems
 
@@ -912,17 +916,21 @@ def dem_tiles_to_gis(gs,dem_dir,Project_Area,vert_unit, patch=False,delete_raw=F
             return tile_rasters
 
 
-def list_existing_grass():
+def list_existing_grass(print_it=False):
     #List Existing Files: Vectors and Rasters
     layers = {'vector':[],'raster':[]}
-    print('Available vector maps:')
+    if print_it:
+        print('Available vector maps:')
     for vect in gs.list_strings(type='vector'):
-        print (vect)
+        if print_it:
+            print (vect)
         layers['vector'].append(vect)
 
-    print('\nAvailable raster maps:')
+    if print_it:
+        print('\nAvailable raster maps:')
     for rast in gs.list_strings(type='raster'):
-        print (rast)
+        if print_it:
+            print (rast)
         layers['raster'].append(rast)
     return layers
 

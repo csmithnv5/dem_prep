@@ -7,5 +7,4 @@ conda activate geoenv
 conda install gdal
 conda install -c conda-forge grass
 # add additional required packages via requirements.txt
-# install grass 7.8 desktop and update variables to point to your grass .bat files in grass_functions.py (line 63, 72)
-# run pip install grass-session on your conda env
+# install grass 7.8 and update variables in grass_functions.py
