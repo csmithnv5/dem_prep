@@ -1,0 +1,12 @@
+name: grassenv
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - jupyterlab
+  - grass
+  - numpy
+  - pandas
+  - geopandas
+  - pip
+  - folium

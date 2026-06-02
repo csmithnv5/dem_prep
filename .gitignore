@@ -1,8 +1,6 @@
 data/Rasters
 data/Vectors
-docker/wincacerts.pem
-docker/stantec-ca.crt
+data/_test_data
 src/.ipynb_checkpoints
 src/__pycache__
 notebooks/.ipynb_checkpoints
-jovyan

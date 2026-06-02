@@ -1,89 +1,52 @@
 # Start from a core stack version
-FROM jupyter/scipy-notebook:2022-01-03
-#399cbb986c6b
+FROM ubuntu:24.04
 
-LABEL authors="Curtis Smith"
-LABEL maintainer="curtis.smith@Stantec.com"
+# Avoid interactive prompts during apt install
+ENV DEBIAN_FRONTEND=noninteractive
 
-COPY docker/stantec-ca.crt /usr/local/share/ca-certificates/stantec-ca.crt
-COPY docker/stantec-ca.crt /etc/ssl/certs/stantec-ca.crt
-COPY docker/wincacerts.pem /usr/local/share/ca-certificates/wincacerts.pem
-
-COPY --chown=${NB_UID}:${NB_GID} docker/requirements.txt /tmp/
-
-USER root
-RUN cat /usr/local/share/ca-certificates/wincacerts.pem >> /etc/ssl/certs/stantec-ca.crt
-
-USER $NB_USER
-
-RUN pip config set global.cert /etc/ssl/certs/stantec-ca.crt
-
-RUN conda config --set ssl_verify /etc/ssl/certs/stantec-ca.crt
-ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/stantec-ca.crt
-ENV PIP_CERT=/etc/ssl/certs/stantec-ca.crt
-
-
-USER root
-
-
-ARG DEBIAN_FRONTEND=noninteractive
-
-RUN apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends --no-install-suggests \
-    build-essential \
-    grass \
-    grass-dev \
-	libgdal-dev \
-    python3-distutils \
-    subversion \
+# Install system dependencies needed for Miniconda and package builds
+RUN apt-get update && apt-get install -y \
+    wget \
+    bzip2 \
     ca-certificates \
-    curl \
-    apt-transport-https \
-    lsb-release gnupg \
-    && apt-get autoremove \
-    && apt-get clean
-
-RUN NAME=$(gdal-config --version)
-RUN apt-get update && apt-get install -y default-jdk 
-
-RUN chmod -R a+rwx $HOME
-RUN chown -R $NB_USER .
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
 
+# Install Miniconda to /opt/conda
+ENV CONDA_DIR=/opt/conda
+RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh && \
+    /bin/bash /tmp/miniconda.sh -b -p $CONDA_DIR && \
+    rm /tmp/miniconda.sh
 
-RUN chmod 644 /usr/local/share/ca-certificates/stantec-ca.crt \
-	&& chmod 644 /usr/local/share/ca-certificates/wincacerts.pem \
-    && chmod 644 /etc/ssl/certs/stantec-ca.crt \
-    && update-ca-certificates
+# Put conda on the system PATH
+ENV PATH=$CONDA_DIR/bin:$PATH
 
-# switch the user
-USER $NB_USER
+# Copy dependency configuration files into the container
+# (Choose the file type that matches your project below)
+COPY environment.yml requirements.txt* ./
 
-ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/stantec-ca.crt
-ENV PIP_CERT=/etc/ssl/certs/stantec-ca.crt
+RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main \
+ && conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+ 
+# Conda environment.yml file
+RUN conda env create -f environment.yml -y && \
+	conda clean -afy 
 
+WORKDIR /home
 
-RUN conda config --set ssl_verify /etc/ssl/certs/stantec-ca.crt
+# Ensure the conda environment is activated for the terminal session
+RUN echo "conda activate grassenv" >> ~/.bashrc
 
-RUN pip config set global.cert /etc/ssl/certs/stantec-ca.crt
+# Set the default shell to use the conda environment's python bin path
+ENV PATH /opt/conda/envs/grassenv/bin:$PATH
 
-RUN npm config set cafile /etc/ssl/certs/stantec-ca.crt --global
+# Make RUN commands inside the Dockerfile use the new environment automatically
+# Replace 'myenv' with the name defined inside your environment.yml
+SHELL ["conda", "run", "-n", "grassenv", "/bin/bash", "-c"]
 
-RUN pip install -r /tmp/requirements.txt && \
-    fix-permissions $CONDA_DIR && \
-    fix-permissions /home/$NB_USER
+# Expose Jupyter port
+EXPOSE 8888
 
-RUN pip install pygdal==3.0.4.11
-RUN pip install pyogrio
-RUN pip install rtree
-RUN pip install pygeos
-RUN pip install boto3
-
-RUN pip install git+https://github.com/zarch/grass-session.git && \
-    fix-permissions $CONDA_DIR && \
-    fix-permissions /home/$NB_USER
-
-#switch the user
-USER root
-
-RUN npm config set cafile /etc/ssl/certs/stantec-ca.crt --global
+# Start Jupyter Server inside the Conda environment
+ENTRYPOINT ["conda", "run", "--no-capture-output", "-n", "grassenv", "jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--NotebookApp.token=''"]
