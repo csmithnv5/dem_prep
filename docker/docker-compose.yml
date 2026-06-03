@@ -5,7 +5,7 @@ services:
     ports:
       - "8888:8888"
     volumes:
-      - ./:/home
+      - ../:/home
     environment:
       - CHOWN_HOME=yes
       - JUPYTER_ENABLE_LAB=yes
