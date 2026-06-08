@@ -6,6 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install system dependencies needed for Miniconda and package builds
 RUN apt-get update && apt-get install -y \
+	build-essential \
     wget \
     bzip2 \
     ca-certificates \

@@ -10,3 +10,4 @@ dependencies:
   - geopandas
   - pip
   - folium
+  - ipyleaflet
