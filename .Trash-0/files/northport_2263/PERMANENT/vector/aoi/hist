@@ -1,0 +1,12 @@
+COMMAND: v.in.ogr --overwrite input="/home/data/Vectors/northport/northport_020302010204_aoi.geojson" output="aoi" min_area=0.0001 type="" snap=-1
+GISDBASE: /home/grassdata
+LOCATION: tmp_v_import_location_c58acd4eda1c_361 MAPSET: PERMANENT USER: root DATE: Tue Jun  9 15:15:05 2026
+-----------------------------------------------------
+1 input polygons
+Total area: 3.8354E+07 (1 areas)
+Overlapping area: 0 (0 areas)
+Area without category: 0 (0 areas)
+---------------------------------------------------------------------------------
+COMMAND: v.proj --overwrite project="tmp_v_import_location_c58acd4eda1c_361" mapset="PERMANENT" input="aoi" smax=10000
+GISDBASE: /home/grassdata
+LOCATION: northport_2263 MAPSET: PERMANENT USER: root DATE: Tue Jun  9 15:15:06 2026

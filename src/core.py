@@ -13,9 +13,15 @@ from shapely.geometry import shape, Polygon
 import datetime
 import glob
 from IPython.display import clear_output
-
 import numpy as np
 import shutil
+#windows only imports
+from osgeo import gdal
+import rasterio
+import rasterio.warp
+from rasterio import features
+import matplotlib.pyplot as plt
+
 
 #####NOTEBOOK 1 DEM DOWNLOAD ###############
 
@@ -371,15 +377,7 @@ def polygonize_raster(raster_path,projection):
 
 
 ###NOTEBOOK 2 ######
-import subprocess
-result = subprocess.run(["grass", "--config", "python_path"],
-                        check=True, text=True, capture_output=True)
-sys.path.append(result.stdout.strip())
 
-# import GRASS Python packages
-from collections import defaultdict
-import grass.script as gs
-import grass.jupyter as gj
 
 def list_existing_grass(print_it=False):
     #List Existing Files: Vectors and Rasters
